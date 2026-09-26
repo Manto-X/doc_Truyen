@@ -1,0 +1,491 @@
+/* Thêm một vài CSS cơ bản cho dễ nhìn */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #fefae0;
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease;
+  /* Áp dụng transition ở đây */
+  font-family: Quicksand, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: calc(17px + 0.3vw);
+  line-height: 1.2;
+  margin: 0 auto;
+  padding: 0 9px 0.9em;
+}
+
+p {
+  margin: 0.5em 0 1em;
+}
+
+hr {
+  margin: 0.5em;
+  border: none;
+  color: transparent;
+  background-color: transparent;
+}
+
+.story-header h1 {
+  font-size: calc(16px + 0.4vw);
+  margin: 7px auto 2px;
+}
+
+/* story-header h2 { font-size: 0.7em; color: #555; } */
+/* Main Navigation Container */
+.navigation {
+  display: flex;
+  flex-wrap: wrap;
+  /* Allows the Player Bar (100% width) to break to next line */
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Grouping container for the 3 links to keep them on ONE line */
+.nav-links {
+  display: flex;
+  width: 100%;
+  /* Occupy full top row */
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  /* CRITICAL: Never wrap these 3 links */
+}
+
+/* Styling for individual links remains mostly same */
+.navigation a {
+  font-size: calc(14px + 0.4vw);
+  display: flex;
+  /* Changed to flex for centering content */
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-decoration: none;
+  padding: 5px 11px 8px;
+  transition: padding 0.4s ease-in-out, line-height 0.4s ease-in-out;
+  background-color: #e9cfaa;
+  border: solid 1px #d4a373;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Middle Link (Chapter Name) */
+.nav-links a:nth-child(2) {
+  flex-grow: 1;
+  /* Stretch to fill space */
+  margin: 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  /* Block needed for ellipsis to work best */
+  text-align: left;
+  padding-top: 5px;
+  /* Alignment fix */
+}
+
+/* Hover & Disabled states ... (Keep existing simple) */
+.navigation a:hover {
+  background-color: #d4a373;
+}
+
+.navigation a.disabled {
+  pointer-events: none;
+  background-color: #d4a373;
+  color: #a17040;
+  cursor: not-allowed;
+}
+
+/* Sticky Bar behavior */
+.stickybar {
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  width: 100%;
+  transition: padding 0.3s ease, line-height 0.3s ease, font-size 0.3s ease;
+}
+
+.navigation.is-sticky a {
+  padding: 0px 7px 3px;
+  line-height: 1.5;
+  font-size: calc(10px + 0.4vw);
+}
+
+/* ... (Keep existing dark mode and .story-content styles) ... */
+.story-content {
+  text-align: left;
+}
+
+.story-content i {
+  color: #666;
+}
+
+.dark {
+  background: #0b090a;
+  color: #fff;
+}
+
+.dark .navigation a {
+  background-color: #432818;
+  color: #ddd;
+  border: solid 1px #99582a;
+}
+
+.dark .navigation a:hover {
+  background: #59341d;
+}
+
+.dark .navigation a.disabled {
+  pointer-events: none;
+  background-color: #271911;
+  color: #555;
+  cursor: not-allowed;
+}
+
+.dark .story-content i {
+  color: #999;
+}
+
+/* TTS Player Bar - Wrapper behavior handled by parent flex-wrap */
+#tts-player-bar {
+  width: 100%;
+  flex-basis: 100%;
+  /* Force new line */
+  order: 10;
+  /* Ensure it's last */
+  background-color: #dcb386;
+  /* Sepia dark */
+  border-top: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* Left aligned buttons */
+  gap: 2px;
+  padding: 2px 0;
+  /* Minimal padding */
+  font-family: "Quicksand", sans-serif;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.dark #tts-player-bar {
+  background-color: #2e1b10;
+  color: #ddd;
+}
+
+/* General Button Styles */
+#tts-player-bar button {
+  padding: 4px 10px;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  background-color: #d4a373;
+  /* Align with theme */
+  color: #333;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.dark #tts-player-bar button {
+  background-color: #432818;
+  color: #ddd;
+}
+
+#tts-player-bar button:hover {
+  background-color: #c38e5d;
+}
+
+.dark #tts-player-bar button:hover {
+  background-color: #b06d3b;
+}
+
+#tts-player-bar select {
+  background-color: #d4a373;
+  padding: 2px;
+  border: 1px solid #d4a373;
+  font-size: 13px;
+}
+
+.dark #tts-player-bar select {
+  background-color: #432818;
+  color: #ddd;
+  border-color: #432818;
+}
+
+#tts-status {
+  font-size: 0.85em;
+  font-style: italic;
+  margin: 0 5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* MOBILE SPECIFIC OVERRIDES */
+@media (max-width: 768px) {
+  .wide {
+    display: none;
+  }
+
+  /* Hide "Trước/Tiếp" text */
+
+  /* Navigation Links: Ensure they fit tight */
+  .navigation a {
+    padding: 5px 12px;
+    /* Tighter padding */
+  }
+
+  /* Player Bar adjustments */
+  #tts-player-bar {
+    justify-content: flex-start;
+    /* Align left to fit content better */
+  }
+
+  /* Voice Selector: Restore width constraint */
+  #tts-voice {
+    width: 40%;
+    max-width: 110px;
+    font-size: 13px;
+  }
+
+  #tts-player-bar button {
+    border-radius: 0 !important;
+    /* REQUESTED: Remove border radius */
+    padding: 3px 0 !important;
+    /* Reset padding */
+    width: 26px;
+    /* Fixed width to prevent shifting */
+    text-align: center;
+    flex: 0 0 auto;
+    /* Prevent flexing */
+  }
+
+  /* Status text adjustments */
+  #tts-status {
+    font-size: calc(10px + 0.4vw) !important;
+    /* REQUESTED: 0.8em */
+    margin-left: 2px;
+    /* Push to left edge */
+    margin-right: auto;
+  }
+
+  /* Hide less important elements to save space */
+  #tts-rate {
+    display: inline-block;
+    width: 30%;
+    max-width: 60px;
+  }
+
+  .btn-text {
+    display: none;
+  }
+
+  /* Hide "Đọc/Dừng" text inside buttons */
+}
+
+/* TTS Highlighting Class */
+.tts-speaking {
+  background-color: #ffeeba;
+  /* Light yellow highlight */
+  color: #000;
+  border-radius: 4px;
+  box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+  transition: background-color 0.3s ease;
+}
+
+/* Dark Mode TTS Highlight */
+.dark .tts-speaking {
+  background-color: #594a2a;
+  /* Darker yellow/brown for dark mode */
+  color: #fff;
+  box-shadow: 0 0 5px rgba(200, 150, 50, 0.3);
+}
+
+/* --- FLOATING TTS PLAYER FOR MOBILE --- */
+#tts-floating-player {
+  display: none;
+  /* Ẩn trên màn hình lớn */
+}
+
+@media (max-width: 768px) {
+
+  /* Ẩn thanh Player cũ */
+  #tts-player-bar {
+    display: none !important;
+  }
+
+  #tts-floating-player {
+    display: flex;
+    position: fixed;
+    /* Vị trí ~ 80% từ trên xuống (hoặc 20% từ dưới lên) */
+    bottom: 30vh;
+    left: 15px;
+    /* Cách trái */
+    width: 130px;
+    height: 55px;
+    /* Chiều cao hợp lý để chạm */
+    background-color: #d1b18a;
+    /* Đậm đà hơn để tương phản trên nền sáng */
+    border: 2px solid #a67c52;
+    /* Viền dày và tối hơn */
+    border-radius: 28px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    overflow: hidden;
+    opacity: 0.45;
+    /* Tăng độ hiển thị nền (mờ 45% thay vì 30%) */
+    transition: opacity 1.2s ease-in-out, background-color 0.8s ease, border-color 0.8s ease, width 0.3s ease, height 0.3s ease, border-radius 0.3s ease, box-shadow 0.3s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  .dark #tts-floating-player {
+    background-color: #432818;
+    border-color: #e08b4a;
+    /* Sáng hơn một chút để rõ viền */
+  }
+
+  #tts-floating-player.active {
+    opacity: 1;
+    /* Sáng 100% khi được Active */
+  }
+
+  /* Thu nhỏ lại thành nút tròn nhỏ ở góc khi ở chế độ nhàn rỗi (idle) */
+  #tts-floating-player:not(.active) {
+    width: 33px;
+    height: 33px;
+    border-radius: 50%;
+  }
+
+  /* Thu nhỏ icon SVG để vừa khít với kích thước 33px */
+  #tts-floating-player:not(.active) svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  /* Kỹ thuật CSS: Vô hiệu hóa nút bấm con khi Widget đang ngủ (không có class active) */
+  #tts-floating-player:not(.active) #tts-float-playpause,
+  #tts-floating-player:not(.active) #tts-float-nav {
+    pointer-events: none;
+  }
+
+  /* Hiệu ứng chớp xanh khi hoàn thành đọc */
+  #tts-floating-player.done-flash {
+    background-color: #2ec4b6 !important;
+    border-color: #0f9f90 !important;
+    box-shadow: 0 0 20px #2ec4b6 !important;
+    opacity: 1 !important;
+  }
+  
+  .dark #tts-floating-player.done-flash {
+    background-color: #0f9f90 !important;
+    border-color: #2ec4b6 !important;
+    box-shadow: 0 0 20px #0f9f90 !important;
+    opacity: 1 !important;
+  }
+
+  /* Hiệu ứng bấm nút chung */
+  .ripple {
+    transition: background-color 0.1s ease;
+  }
+
+  .ripple:active {
+    background-color: rgba(0, 0, 0, 0.15);
+    /* Feedback khi chạm (Light theme) */
+  }
+
+  .dark .ripple:active {
+    background-color: rgba(255, 255, 255, 0.15);
+    /* Feedback cho Dark theme */
+  }
+
+  /* Vành Play/Pause (Bên trái) */
+  #tts-float-playpause {
+    width: 45%;
+    /* Diện tích lớn 45% */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid #d4a373;
+    color: #4a2c11;
+    /* Tối màu hơn nữa để cực kỳ rõ nét trên nền sáng */
+    cursor: pointer;
+    transition: width 0.3s ease, border-right-color 0.3s ease;
+  }
+
+  .dark #tts-float-playpause {
+    border-right-color: #99582a;
+    color: #fbd6b1;
+    /* Tương phản sáng trên nền tối */
+  }
+
+  #tts-floating-player:not(.active) #tts-float-playpause {
+    width: 100%;
+    border-right-color: transparent;
+  }
+
+  /* Cột Lên/Xuống (Bên phải) */
+  #tts-float-nav {
+    width: 55%;
+    display: flex;
+    flex-direction: column;
+    transition: width 0.3s ease, opacity 0.2s ease;
+  }
+
+  #tts-floating-player:not(.active) #tts-float-nav {
+    width: 0%;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .tts-float-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    /* Căn lề trái */
+    padding-left: 7px;
+    /* Cách lề trái vài px theo yêu cầu */
+    font-size: 15px;
+    font-weight: bold;
+    color: #4a2c11;
+    /* Đồng bộ với nút Play (màu đậm đà) */
+    cursor: pointer;
+  }
+
+  .dark .tts-float-btn {
+    color: #fbd6b1;
+    /* Đồng màu với nút Play (Dark) */
+  }
+
+  #tts-float-prev {
+    border-bottom: 1px solid #d4a373;
+  }
+
+  .dark #tts-float-prev {
+    border-bottom-color: #99582a;
+  }
+}
+
+/* Các kiểu dáng hiển thị cho chương được gộp (Merge Chapters) */
+.chapter-separator {
+  margin: 2.5em 0 1.5em;
+  border: 0;
+  height: 1px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(166, 124, 82, 0.6), rgba(0, 0, 0, 0));
+}
+.dark .chapter-separator {
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(224, 139, 74, 0.6), rgba(0, 0, 0, 0));
+}
+.merged-chapter-title {
+  font-size: calc(14px + 0.4vw);
+  margin: 1.5em auto 1em;
+  text-align: center;
+  color: #a67c52;
+  font-weight: bold;
+}
+.dark .merged-chapter-title {
+  color: #e08b4a;
+}

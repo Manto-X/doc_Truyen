@@ -1,0 +1,17 @@
+RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Loại bỏ index.php nếu có và chuyển hướng (redirect)
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /index\.php\?s=([^&]+)&p=(.*)\ HTTP/
+RewriteRule ^index\.php$ /%1/%2/? [R=301,L]
+
+# Chuyển đổi query string thành đường dẫn thân thiện và chuyển hướng (redirect)
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /\?s=([^&]+)&p=(.*)\ HTTP/
+RewriteRule ^$ /%1/%2/? [R=301,L]
+
+# Ánh xạ đường dẫn thân thiện trở lại query string cho nội bộ
+# Giờ đây, ($2) sẽ chứa toàn bộ đường dẫn của 'p', bao gồm cả dấu gạch chéo
+RewriteRule ^([^/]+)/(.*)/?$ index.php?s=$1&p=$2 [L,QSA]

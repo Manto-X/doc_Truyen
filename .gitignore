@@ -1,0 +1,36 @@
+# Codex / local agent metadata
+/.agents/
+/.codex/
+
+# Runtime-generated data
+/cache/
+*.cache
+*.log
+*.tmp
+
+# Local backups
+/backup/
+*.bak
+*.orig
+*~
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+/config/config.local.json
+
+# Dependencies and test/build output
+/vendor/
+/node_modules/
+/coverage/
+/.phpunit.cache/
+.phpunit.result.cache
+.php-cs-fixer.cache
+
+# IDE and operating-system metadata
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
