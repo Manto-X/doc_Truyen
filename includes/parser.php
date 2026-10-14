@@ -1,5 +1,6 @@
 <?php
 // includes/parser.php
+require_once __DIR__ . '/source_registry.php';
 
 /**
  * Hàm fetch URL có cơ chế cache và dùng cURL để tránh bị chặn.
@@ -7,7 +8,7 @@
  * @param int $cache_time Thời gian cache (giây), mặc định 1 giờ.
  * @return string Nội dung HTML của trang
  */
-function fetchUrlWithCache($url, $cache_time = 3600) {
+function fetchUrlWithCache($url, $cache_time = 3600, array $headers = []) {
     $cacheDir = __DIR__ . '/../cache'; // Tạo thư mục cache cùng cấp với includes
     if (!is_dir($cacheDir)) {
         mkdir($cacheDir, 0755, true);
@@ -17,7 +18,10 @@ function fetchUrlWithCache($url, $cache_time = 3600) {
 
     // Nếu có cache và cache chưa hết hạn, dùng cache
     if (file_exists($cacheFile) && (time() - filemtime($cacheFile) < $cache_time)) {
-        return file_get_contents($cacheFile);
+        $cached = file_get_contents($cacheFile);
+        if ($cached !== false && trim($cached) !== '') {
+            return $cached;
+        }
     }
 
     // Nếu không có cache, tiến hành fetch bằng cURL
@@ -28,15 +32,28 @@ function fetchUrlWithCache($url, $cache_time = 3600) {
         CURLOPT_MAXREDIRS      => 5,
         CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36', // Giả mạo trình duyệt Chrome
         CURLOPT_TIMEOUT        => 30,          // Timeout sau 30 giây
-        CURLOPT_SSL_VERIFYPEER => false        // Bỏ qua xác thực SSL (hữu ích với 1 số host)
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HTTPHEADER => $headers
     ]);
     
     $html = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    $error = curl_error($ch);
     curl_close($ch);
 
-    // Nếu fetch thành công, lưu vào cache
-    if ($html) {
-        file_put_contents($cacheFile, $html);
+    if ($html === false || $httpCode < 200 || $httpCode >= 300 || ($contentType && stripos($contentType, 'html') === false)) {
+        throw new Exception('Không thể tải nguồn: ' . ($error ?: "HTTP {$httpCode}"));
+    }
+    if (trim($html) === '') {
+        throw new Exception('Nguồn trả về nội dung rỗng.');
+    }
+
+    // Chỉ cache phản hồi thành công, ghi nguyên tử để không lưu cache dở dang.
+    $temporary = $cacheFile . '.' . uniqid('', true) . '.tmp';
+    if (file_put_contents($temporary, $html, LOCK_EX) !== false) {
+        rename($temporary, $cacheFile);
     }
     
     return $html;
@@ -81,11 +98,6 @@ function normalizeParagraphs($rawHtmlContent) {
             $cleanedHtml = preg_replace('/' . preg_quote($ad, '/') . '.*?(\n|$)/iu', '', $cleanedHtml);
         }
 
-        // Bước 3.5: Lọc nội dung rác và cắt đuôi quảng cáo
-        // Tìm kiếm từ trên xuống dưới các chuỗi gồm 5 ký tự đặc biệt liên tiếp (=====, *****, -----, _____)
-        // và thay thế chúng cùng toàn bộ nội dung phía sau thành chuỗi rỗng.
-        $cleanedHtml = preg_replace('/[=\-\*_]{5,}.*$/us', '', $cleanedHtml);
-
         // Bước 4: Chuẩn hóa các dấu phân cách
         $cleanedHtml = str_replace(["\r\n", "\r"], "\n", $cleanedHtml);
         $cleanedHtml = preg_replace('#\s*__BR_BREAK__\s*#i', '__PARA_BREAK__', $cleanedHtml);
@@ -102,7 +114,7 @@ function normalizeParagraphs($rawHtmlContent) {
             $para = trim($para);
             
             if (!empty($para)) {
-                $result .= "<p>" . $para . "</p>\n";
+                $result .= "<p>" . htmlspecialchars($para, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</p>\n";
             }
         }
         return $result;
@@ -116,7 +128,11 @@ function normalizeParagraphs($rawHtmlContent) {
  * @return string Nội dung đã được xử lý
  */
 function parseContentByDOM($htmlString, $selectors, $xpath) {
-    $contentNode = $xpath->query($selectors['content_div'])->item(0);
+    try {
+        $contentNode = $xpath->query($selectors['content_div'])->item(0);
+    } catch (Throwable $error) {
+        throw new Exception('XPath vùng nội dung không hợp lệ.');
+    }
     $contentHtml = '';
     
     if ($contentNode) {
@@ -162,7 +178,7 @@ function parseContentByRegex($htmlString, $siteKey, $regexPatterns) {
         }
     }
 
-    if (preg_match($pattern, $htmlString, $matches)) {
+    if (@preg_match($pattern, $htmlString, $matches) === 1) {
         $rawChapterContent = $matches[1];
     }
     
@@ -170,18 +186,14 @@ function parseContentByRegex($htmlString, $siteKey, $regexPatterns) {
 }
 
 function getStoryData($siteKey, $path, $forceParseMethod = null) {
-    // 1. Đọc file config
-    $configFile = __DIR__ . '/../config/config.json';
-    if (!file_exists($configFile)) {
-        throw new Exception("Lỗi: File config.json không tồn tại.");
+    $source = sourceConfig($siteKey);
+    $siteKey = $source['key'];
+    $path = ltrim(trim((string)$path), '/');
+    if ($path === '' || strpos($path, '..') !== false || preg_match('#[\r\n]#', $path)) {
+        throw new Exception('Đường dẫn chương không hợp lệ.');
     }
-    $config = json_decode(file_get_contents($configFile), true);
-
-    // 2. Lấy đúng cấu hình cho site được yêu cầu
-    if (!isset($config['sites'][$siteKey])) {
-        throw new Exception("Lỗi: Không tìm thấy cấu hình cho site '{$siteKey}'.");
-    }
-    $siteConfig = $config['sites'][$siteKey];
+    // 1. Lấy cấu hình nguồn đã được registry kiểm tra.
+    $siteConfig = $source['config'];
     $sourceDomain = $siteConfig['domain'];
     $selectors = $siteConfig['selectors'];
 
@@ -191,11 +203,15 @@ function getStoryData($siteKey, $path, $forceParseMethod = null) {
     // Lấy regex patterns nếu có
     $regexPatterns = $siteConfig['regex_patterns'] ?? [];
     
-    // 3. Tiến hành fetch qua bridge tại VN để tránh bị chặn IP
+    // 3. Fetch qua bridge. Token chỉ lấy từ biến môi trường và gửi header.
     $fullUrl = 'https://' . $sourceDomain . '/' . $path;
-    $bridgeUrl = "http://103.124.95.161/~nhthuubk/bridge.php?token=Ami_www_Read2026&url=" . urlencode($fullUrl);
-    
-    $htmlString = fetchUrlWithCache($bridgeUrl);
+    $bridgeBaseUrl = rtrim((string)getenv('READER_BRIDGE_URL'), '/');
+    $bridgeToken = (string)getenv('READER_BRIDGE_TOKEN');
+    if ($bridgeBaseUrl === '' || $bridgeToken === '') {
+        throw new Exception('Bridge chưa được cấu hình an toàn.');
+    }
+    $bridgeUrl = $bridgeBaseUrl . '/bridge.php?url=' . rawurlencode($fullUrl);
+    $htmlString = fetchUrlWithCache($bridgeUrl, 3600, ['X-Bridge-Token: ' . $bridgeToken]);
     
     if (!$htmlString) {
         throw new Exception("Không thể tải nội dung (qua bridge) từ: " . $fullUrl);
@@ -221,32 +237,54 @@ function getStoryData($siteKey, $path, $forceParseMethod = null) {
     $data['ten_truyen'] = $getNodeValue($selectors['story_title']);
     $data['ten_chuong'] = $getNodeValue($selectors['chapter_title']);
 
-     // Trích xuất liên kết "Trước" và "Tiếp"
+    if (!$data['ten_truyen'] || !$data['ten_chuong']) {
+        throw new Exception('Nguồn không có đủ tiêu đề truyện hoặc chương.');
+    }
+
+     // Trích xuất liên kết "Trước" và "Tiếp" bằng selector riêng.
     $prev_path = '';
     $next_path = '';
-    // Lấy tất cả thẻ <a> trong khu vực điều hướng
-    $links = $xpath->query($selectors['prev_chapter_url']); // Cả prev và next dùng chung selector
-    foreach ($links as $link) {
-        $text = trim($link->textContent);
-        $href = ($link instanceof DOMElement) ? $link->getAttribute('href') : '';
-        // Kiểm tra liên kết "Trước"
-        if (stripos($text, $selectors['prev_chapter_text']) !== false && $href !== 'javascript:void(0)') {
-            $prev_path = $href; //echo "PREV PATH: [" . $prev_path . "]<br/>";
+    $findChapterLink = function($query, $label) use ($xpath) {
+        try {
+            $links = $xpath->query($query);
+        } catch (Throwable $error) {
+            throw new Exception('XPath điều hướng không hợp lệ.');
         }
-        // Kiểm tra liên kết "Tiếp"/"Sau"
-        if (stripos($text, $selectors['next_chapter_text']) !== false && $href !== 'javascript:void(0)') {
-            $next_path = $href; //echo "NEXT PATH: [" . $next_path . "]<br/>";
+        foreach ($links as $link) {
+            $text = trim($link->textContent);
+            $href = ($link instanceof DOMElement) ? $link->getAttribute('href') : '';
+            if ($href && $href !== 'javascript:void(0)' && stripos($text, $label) !== false) {
+                return $href;
+            }
         }
-    }
-    // Làm sạch đường dẫn: loại bỏ domain và #fragment
-    $data['path_chuong_truoc'] = $prev_path ? trim(parse_url($prev_path, PHP_URL_PATH), '/') : 'void(0)';
-    $data['path_chuong_sau'] = $next_path ? trim(parse_url($next_path, PHP_URL_PATH), '/') : 'void(0)';
+        return '';
+    };
+    $prev_path = $findChapterLink($selectors['prev_chapter_url'], $selectors['prev_chapter_text']);
+    $next_path = $findChapterLink($selectors['next_chapter_url'], $selectors['next_chapter_text']);
+
+    $normalisePath = function($href) use ($sourceDomain, $path) {
+        if (!$href) return 'void(0)';
+        $parts = parse_url($href);
+        if ($parts === false || isset($parts['user']) || isset($parts['port'])) return 'void(0)';
+        if (!empty($parts['host']) && strtolower($parts['host']) !== strtolower($sourceDomain)) return 'void(0)';
+        $candidate = $parts['path'] ?? '';
+        if ($candidate === '') return 'void(0)';
+        if ($candidate[0] !== '/') {
+            $candidate = rtrim(dirname('/' . $path), '/') . '/' . $candidate;
+        }
+        return trim($candidate, '/') ?: 'void(0)';
+    };
+    $data['path_chuong_truoc'] = $normalisePath($prev_path);
+    $data['path_chuong_sau'] = $normalisePath($next_path);
 
     // 5. Parse nội dung theo phương thức đã chọn
     if ($parseMethod === 'dom') {
         $data['noi_dung'] = parseContentByDOM($htmlString, $selectors, $xpath);
     } else {
         $data['noi_dung'] = parseContentByRegex($htmlString, $siteKey, $regexPatterns);
+    }
+    if (trim(strip_tags($data['noi_dung'])) === '') {
+        throw new Exception('Không trích xuất được nội dung chương hợp lệ.');
     }
 
     return $data;

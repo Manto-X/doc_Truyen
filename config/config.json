@@ -1,6 +1,7 @@
 {
     "sites": {
         "truyenfull": {
+            "aliases": ["tf"],
             "domain": "truyenfull.vision",
             "parse_method": "regex",
             "regex_patterns": {

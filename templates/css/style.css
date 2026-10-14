@@ -364,11 +364,7 @@ hr {
     height: 18px !important;
   }
 
-  /* Kỹ thuật CSS: Vô hiệu hóa nút bấm con khi Widget đang ngủ (không có class active) */
-  #tts-floating-player:not(.active) #tts-float-playpause,
-  #tts-floating-player:not(.active) #tts-float-nav {
-    pointer-events: none;
-  }
+  /* Nút Đọc luôn bấm được, kể cả khi widget thu gọn. */
 
   /* Hiệu ứng chớp xanh khi hoàn thành đọc */
   #tts-floating-player.done-flash {
@@ -412,6 +408,10 @@ hr {
     /* Tối màu hơn nữa để cực kỳ rõ nét trên nền sáng */
     cursor: pointer;
     transition: width 0.3s ease, border-right-color 0.3s ease;
+    border-top: 0;
+    border-left: 0;
+    border-bottom: 0;
+    background: transparent;
   }
 
   .dark #tts-float-playpause {
@@ -453,6 +453,8 @@ hr {
     color: #4a2c11;
     /* Đồng bộ với nút Play (màu đậm đà) */
     cursor: pointer;
+    border: 0;
+    background: transparent;
   }
 
   .dark .tts-float-btn {

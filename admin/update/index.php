@@ -1,12 +1,63 @@
 <?php
-// Khởi động session (vẫn cần để lưu trạng thái xác thực sau bước 1)
+// Khởi động session với cookie chỉ dùng HTTP và chống fixation cơ bản.
+$sessionSavePath = (string)getenv('READER_SESSION_SAVE_PATH');
+if ($sessionSavePath !== '' && is_dir($sessionSavePath) && is_writable($sessionSavePath)) {
+    session_save_path($sessionSavePath);
+}
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
 session_start();
 
 // Đường dẫn tới tệp cấu hình
-define('CONFIG_FILE', '../../config/config.json');
+define('CONFIG_FILE', __DIR__ . '/../../config/config.json');
+define('BACKUP_DIR', __DIR__ . '/../../backup/config-revisions');
+define('DRAFT_DIR', __DIR__ . '/../../backup/config-drafts');
+
+function saveConfigAtomically(array $config, string $siteKey): bool {
+    $json = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) return false;
+    if (!is_dir(BACKUP_DIR) && !mkdir(BACKUP_DIR, 0750, true)) return false;
+    $revision = BACKUP_DIR . '/' . preg_replace('/[^a-z0-9_-]/i', '_', $siteKey) . '-' . gmdate('Ymd-His') . '.json';
+    if (!copy(CONFIG_FILE, $revision)) return false;
+    $temporary = CONFIG_FILE . '.' . bin2hex(random_bytes(6)) . '.tmp';
+    if (file_put_contents($temporary, $json, LOCK_EX) === false) return false;
+    return rename($temporary, CONFIG_FILE);
+}
+
+function writeJsonAtomically(string $file, array $data): bool {
+    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) return false;
+    $temporary = $file . '.' . bin2hex(random_bytes(6)) . '.tmp';
+    if (file_put_contents($temporary, $json, LOCK_EX) === false) return false;
+    return rename($temporary, $file);
+}
+
+function draftFile(string $siteKey): string {
+    return DRAFT_DIR . '/' . preg_replace('/[^a-z0-9_-]/i', '_', $siteKey) . '.json';
+}
+
+function revisionFiles(string $siteKey): array {
+    $prefix = preg_replace('/[^a-z0-9_-]/i', '_', $siteKey) . '-*.json';
+    $files = glob(BACKUP_DIR . '/' . $prefix) ?: [];
+    rsort($files, SORT_STRING);
+    return $files;
+}
+
+function validateSiteConfig(array $site): array {
+    $errors = [];
+    if (empty($site['domain']) || !preg_match('/^[a-z0-9.-]+$/i', $site['domain'])) $errors[] = 'Tên miền không hợp lệ.';
+    if (!in_array($site['parse_method'] ?? '', ['dom', 'regex'], true)) $errors[] = 'Phương thức parse không hợp lệ.';
+    if (($site['parse_method'] ?? '') === 'regex' && !empty($site['regex_patterns']['content']) && @preg_match($site['regex_patterns']['content'], '') === false) $errors[] = 'Regex nội dung không hợp lệ.';
+    foreach (($site['selectors'] ?? []) as $name => $selector) {
+        if (!is_string($selector) || trim($selector) === '') $errors[] = "XPath {$name} trống.";
+    }
+    return $errors;
+}
 
 // Khởi tạo các biến
 $message = '';
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 // Xác định xem có đang ở chế độ sửa một site cụ thể không (ví dụ: ?edit=tf)
 $site_to_edit = $_GET['edit'] ?? null;
 // Đọc toàn bộ file config
@@ -14,8 +65,7 @@ $config = json_decode(file_get_contents(CONFIG_FILE), true);
 // Lấy danh sách các site hiện có
 $sites = $config['sites'] ?? [];
 
-// Mã bảo mật CHÍNH XÁC cố định
-$correct_security_code = 'them_so_cua_ban_vao_day';
+$adminPasswordHash = (string)getenv('READER_ADMIN_PASSWORD_HASH');
 
 // Tạo mã ngẫu nhiên để làm "mồi nhử" hiển thị sẵn trong ó input
 // Chuỗi này chỉ được tạo khi chưa xác thực hoặc khi quay về trang chọn site
@@ -34,13 +84,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $submitted_code = $_POST['security_code'] ?? '';
 
         // Bước 1: Kiểm tra mã bảo mật. Nếu sai, dừng mọi xử lý.
-        if ($submitted_code !== $correct_security_code) { // So sánh với chuỗi cứng
+        if ($adminPasswordHash === '') {
+            $message = '<p class="msg-error">Lỗi: Admin chưa được cấu hình password hash.</p>';
+            unset($_SESSION['authenticated']);
+        } elseif (!password_verify($submitted_code, $adminPasswordHash)) {
             $message = '<p class="msg-error">Lỗi: Sai mã bảo mật!</p>';
             // Không làm gì với decoy_code_value, nó sẽ được tạo lại khi trang tải lại
             unset($_SESSION['authenticated']); // Đảm bảo cờ xác thực bị xóa nếu sai
         } else {
             // Mã bảo mật ĐÚNG, tiến hành chọn site và đặt cờ xác thực
             $_SESSION['authenticated'] = true; // Đánh dấu đã xác thực
+            session_regenerate_id(true);
             $selected_site = $_POST['site_key'] ?? null;
             if ($selected_site && isset($sites[$selected_site])) {
                 // Chuyển hướng đến chính trang này với tham số ?edit=...
@@ -54,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // B. HÀNH ĐỘNG: LƯU CẤU HÌNH CỦA SITE ĐANG SỬA
     if (isset($_POST['action_save_config'])) {
-        if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
+        if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) {
             $message = '<p class="msg-error">Lỗi: Bạn chưa được xác thực để thực hiện hành động này.</p>';
         } else {
             // Đã xác thực, tiến hành lưu
@@ -80,13 +134,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // Ghi lại vào file
-                if (file_put_contents(CONFIG_FILE, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))) {
-                    $message = '<p class="msg-success">Cập nhật thành công cho site: ' . strtoupper($site_key_to_save) . '</p>';
-                    // Tải lại dữ liệu mới sau khi lưu
-                    $sites = $config['sites'];
+                if (!is_dir(DRAFT_DIR) && !mkdir(DRAFT_DIR, 0750, true)) {
+                    $message = '<p class="msg-error">Lỗi: Không thể tạo vùng bản nháp.</p>';
+                } elseif ($errors = validateSiteConfig($config['sites'][$site_key_to_save])) {
+                    $message = '<p class="msg-error">Bản nháp chưa hợp lệ: ' . htmlspecialchars(implode(' ', $errors), ENT_QUOTES, 'UTF-8') . '</p>';
+                } elseif (writeJsonAtomically(draftFile($site_key_to_save), $config['sites'][$site_key_to_save])) {
+                    $message = '<p class="msg-success">Đã lưu bản nháp cho site: ' . strtoupper($site_key_to_save) . '. Cấu hình live chưa thay đổi.</p>';
                 } else {
-                    $message = '<p class="msg-error">Lỗi: Không thể ghi vào tệp cấu hình.</p>';
+                    $message = '<p class="msg-error">Lỗi: Không thể ghi bản nháp.</p>';
                 }
+            }
+        }
+    }
+
+    if (isset($_POST['action_publish_draft'])) {
+        $site_key_to_publish = $_POST['site_key_to_save'] ?? null;
+        if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '') || !$site_key_to_publish || !isset($sites[$site_key_to_publish])) {
+            $message = '<p class="msg-error">Không được phép xuất bản bản nháp này.</p>';
+        } else {
+            $draftPath = draftFile($site_key_to_publish);
+            $draft = is_file($draftPath) ? json_decode((string)file_get_contents($draftPath), true) : null;
+            if (!is_array($draft)) {
+                $message = '<p class="msg-error">Không tìm thấy bản nháp hợp lệ.</p>';
+            } elseif ($errors = validateSiteConfig($draft)) {
+                $message = '<p class="msg-error">Không thể xuất bản: ' . htmlspecialchars(implode(' ', $errors), ENT_QUOTES, 'UTF-8') . '</p>';
+            } else {
+                $published = $config;
+                $published['sites'][$site_key_to_publish] = $draft;
+                if (saveConfigAtomically($published, $site_key_to_publish)) {
+                    unlink($draftPath);
+                    $config = $published;
+                    $sites = $config['sites'];
+                    $message = '<p class="msg-success">Đã xuất bản bản nháp: ' . strtoupper($site_key_to_publish) . '</p>';
+                } else {
+                    $message = '<p class="msg-error">Không thể xuất bản cấu hình.</p>';
+                }
+            }
+        }
+    }
+
+    if (isset($_POST['action_rollback_revision'])) {
+        $site_key_to_rollback = $_POST['site_key_to_save'] ?? null;
+        $revisionName = basename((string)($_POST['revision_file'] ?? ''));
+        $allowed = $site_key_to_rollback ? array_map('basename', revisionFiles($site_key_to_rollback)) : [];
+        if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '') || !in_array($revisionName, $allowed, true)) {
+            $message = '<p class="msg-error">Không được phép hoàn tác revision này.</p>';
+        } else {
+            $revision = json_decode((string)file_get_contents(BACKUP_DIR . '/' . $revisionName), true);
+            if (!is_array($revision) || !isset($revision['sites'][$site_key_to_rollback])) {
+                $message = '<p class="msg-error">Revision backup không hợp lệ.</p>';
+            } elseif (saveConfigAtomically($revision, $site_key_to_rollback)) {
+                $config = $revision;
+                $sites = $config['sites'];
+                $message = '<p class="msg-success">Đã hoàn tác revision: ' . htmlspecialchars($revisionName, ENT_QUOTES, 'UTF-8') . '</p>';
+            } else {
+                $message = '<p class="msg-error">Không thể hoàn tác revision.</p>';
             }
         }
     }
@@ -94,6 +196,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Lấy thông tin của site đang được sửa (nếu có)
 $edit_data = ($site_to_edit && isset($sites[$site_to_edit])) ? $sites[$site_to_edit] : null;
+$draft_data = ($site_to_edit && is_file(draftFile($site_to_edit))) ? json_decode((string)file_get_contents(draftFile($site_to_edit)), true) : null;
+if (is_array($draft_data)) $edit_data = $draft_data;
+$revisions = $site_to_edit ? revisionFiles($site_to_edit) : [];
 
 ?>
 <!DOCTYPE html>
@@ -112,6 +217,7 @@ $edit_data = ($site_to_edit && isset($sites[$site_to_edit])) ? $sites[$site_to_e
     <?php if ($edit_data && isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true): ?>
         <form method="POST" action="index.php?edit=<?php echo htmlspecialchars($site_to_edit); ?>">
             <input type="hidden" name="site_key_to_save" value="<?php echo htmlspecialchars($site_to_edit); ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
             
             <fieldset>
                 <legend>Cấu hình cho site: <?php echo strtoupper(htmlspecialchars($site_to_edit)); ?></legend>
@@ -141,7 +247,20 @@ $edit_data = ($site_to_edit && isset($sites[$site_to_edit])) ? $sites[$site_to_e
             </fieldset>
             
             <br>
-            <button type="submit" name="action_save_config" class="btn-save">Lưu Cấu hình</button>
+            <button type="submit" name="action_save_config" class="btn-save">Lưu bản nháp</button>
+            <?php if (is_array($draft_data)): ?>
+                <button type="submit" name="action_publish_draft" class="btn-save" onclick="return confirm('Xuất bản bản nháp này?');">Xuất bản bản nháp</button>
+                <p class="field-hint">Đang chỉnh sửa bản nháp; cấu hình live chưa thay đổi.</p>
+            <?php endif; ?>
+            <?php if ($revisions): ?>
+                <label for="revision_file">Hoàn tác về revision:</label>
+                <select id="revision_file" name="revision_file">
+                    <?php foreach ($revisions as $revision): ?>
+                        <option value="<?php echo htmlspecialchars(basename($revision), ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars(basename($revision), ENT_QUOTES, 'UTF-8'); ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" name="action_rollback_revision" class="btn-save" onclick="return confirm('Hoàn tác cấu hình live?');">Hoàn tác</button>
+            <?php endif; ?>
         </form>
         
         <!-- Thêm JavaScript để hiển thị/ẩn phần regex patterns tùy theo phương thức parse -->

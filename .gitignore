@@ -34,3 +34,21 @@
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# === Security Patch ===
+*.key
+*.pem
+*.p12
+*.pfx
+*.pkcs12
+*.ppk
+*.pub
+id_*
+credentials.json
+client_secret*.json
+scratch/
+
+# OS desktop.ini
+desktop.ini
+Desktop.ini
+[Dd]esktop.ini

@@ -1,5 +1,8 @@
 RewriteEngine On
 
+# Các dữ liệu cấu hình, cache và bản sao lưu chỉ được PHP đọc nội bộ.
+RewriteRule ^(?:config|cache|includes|backup)(?:/|$) - [F,L,NC]
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]

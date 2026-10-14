@@ -26,7 +26,12 @@ require_once 'includes/parser.php';
 
 // 2. LẤY THAM SỐ TỪ URL
 // Lấy mã trang, mặc định là 'tf' (truyenfull) nếu không có
-$siteKey = $_GET['s'] ?? 'tf'; 
+$siteKey = $_GET['s'] ?? 'tf';
+// Giữ tương thích với các URL mẫu và bookmark cũ.
+$siteKey = strtolower(trim($siteKey));
+if ($siteKey === 'tf') {
+    $siteKey = 'truyenfull';
+}
 // Lấy đường dẫn chương, dùng 'p' cho ngắn gọn
 $path = $_GET['p'] ?? null;
 
