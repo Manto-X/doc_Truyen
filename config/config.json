@@ -1,0 +1,41 @@
+{
+  "sites": {
+    "tamlinh": {
+      "domain": "tamlinh247.biz",
+      "parse_method": "dom",
+      "regex_patterns": {
+        "content": "#<div class=\"reading-content\">(.*?)<div class=\"entry-header footer\" id=\"manga-reading-nav-foot\"#is"
+      },
+      "selectors": {
+        "ads_in_content": "",
+        "chapter_title": "//h1[@id='chapter-heading']",
+        "content_div": "//div[contains(concat(' ', normalize-space(@class), ' '), ' reading-content ')]",
+        "next_chapter_text": "Next",
+        "next_chapter_url": "//a[contains(concat(' ', normalize-space(@class), ' '), ' next_page ')]",
+        "prev_chapter_text": "Prev",
+        "prev_chapter_url": "//a[contains(concat(' ', normalize-space(@class), ' '), ' prev_page ')]",
+        "story_title": "//ol[contains(concat(' ', normalize-space(@class), ' '), ' breadcrumb ')]/li[3]/a"
+      }
+    },
+    "truyenfull": {
+      "aliases": [
+        "tf"
+      ],
+      "domain": "truyenfull.vision",
+      "parse_method": "regex",
+      "regex_patterns": {
+        "content": "#<div[^>]+id=[\"']chapter-c[\"'][^>]*>(.*?)<\\/div>\\s*<div[^>]+id=[\"']ads-chapter-(?:google-)?(?:bottom|middle)[\"']#is"
+      },
+      "selectors": {
+        "ads_in_content": "//div[contains(@class, 'ads')]",
+        "chapter_title": "//*[@id='chapter-big-container']//a[@class='chapter-title']",
+        "content_div": "//*[@id='chapter-c']",
+        "next_chapter_text": "tiếp",
+        "next_chapter_url": "//*[@id='chapter-nav-top']//div[@class='btn-group']//a",
+        "prev_chapter_text": "trước",
+        "prev_chapter_url": "//*[@id='chapter-nav-top']//div[@class='btn-group']//a",
+        "story_title": "//*[@id='chapter-big-container']//a[@class='truyen-title']"
+      }
+    }
+  }
+}
